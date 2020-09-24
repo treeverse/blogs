@@ -54,7 +54,6 @@ func batchReader(pkChan chan string, exitWG *sync.WaitGroup) {
 			break
 		}
 		entry, err := ReadEntry(pk)
-		//fmt.Print(pk, "   ", entry.Payload, "\n")
 		panicIfError(err)
 		if entry.Pk != pk {
 			panic("entry do not match request")
@@ -87,7 +86,6 @@ func collectStats(duration time.Duration, readNum, batchSize int, batched bool) 
 	if batched {
 		batchedStr = " batched   "
 	}
-	//timePer10_000Reads := duration / (readNum/1000)
 	durationStr := fmt.Sprintf("%v", duration)
 	batchSizeStr := fmt.Sprintf("% 10d", batchSize)
 	readNumStr := fmt.Sprintf("% 10d", readNum)
