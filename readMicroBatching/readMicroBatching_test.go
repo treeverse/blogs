@@ -43,7 +43,7 @@ func TestRead(t *testing.T) {
 	}
 	close(pkChan)
 	readExitWG.Wait()
-	appendResults(time.Now().Sub(start), NumberOfReads, NumberOfReadsPerBatch, batchedRead)
+	collectStats(time.Now().Sub(start), NumberOfReads, NumberOfReadsPerBatch, batchedRead)
 }
 
 func batchReader(pkChan chan string, exitWG *sync.WaitGroup) {
@@ -79,7 +79,7 @@ func discreteReader(pkChan chan string, exitWG *sync.WaitGroup) {
 	}
 }
 
-func appendResults(duration time.Duration, readNum, batchSize int, batched bool) {
+func collectStats(duration time.Duration, readNum, batchSize int, batched bool) {
 	f, err := os.OpenFile(statisticsFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
 	panicIfError(err)
 	w := csv.NewWriter(f)
