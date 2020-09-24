@@ -1,7 +1,6 @@
 package readMicroBatching
 
 import (
-	//"database/sql"
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -13,7 +12,7 @@ const (
 	NumberOfReadWorkers   = 10
 	BatchingTimeout       = 500 * time.Microsecond
 	ReadTimeout           = 100 * time.Millisecond
-	NumberOfReadsPerBatch = 4
+	NumberOfReadsPerBatch = 16
 )
 
 type readRequest struct {
@@ -49,7 +48,6 @@ func ReadEntry(pk string) (*rowType, error) {
 }
 
 func InitReading() {
-	var err error
 	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
 	panicIfError(err)
 	db, err = pgxpool.ConnectConfig(context.Background(), poolConfig)
