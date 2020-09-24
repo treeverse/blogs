@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	NumberOfReadWorkers   = 8
-	BatchingTimeout       = 1 * time.Millisecond
-	ReadTimeout           = 1 * time.Second
-	NumberOfReadsPerBatch = 32
+	NumberOfReadWorkers   = 10
+	BatchingTimeout       = 500 * time.Microsecond
+	ReadTimeout           = 100 * time.Millisecond
+	NumberOfReadsPerBatch = 4
 )
 
 type readRequest struct {
