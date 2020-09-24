@@ -1,4 +1,4 @@
-package main
+package readMicroBatching
 
 import (
 	//"database/sql"
@@ -102,8 +102,6 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 		for _, readRequest := range message {
 			pkSlice = append(pkSlice, readRequest.pk)
 		}
-		//pkString := `'` + strings.Join(pkSlice, "','") + `'`
-		//readEntriesSQL := " select pk,payload from random_read_test where pk in (" + pkString + ")"
 		readEntriesSQL := " select pk,payload from random_read_test where pk = any ($1)"
 		rows, err := db.Query(context.Background(), readEntriesSQL, pkSlice)
 		if err != nil {
@@ -132,7 +130,6 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 			readRequest.replyChan <- response
 			close(readRequest.replyChan)
 		}
-
 	}
 }
 

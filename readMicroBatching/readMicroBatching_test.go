@@ -1,4 +1,4 @@
-package main
+package readMicroBatching
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -24,7 +25,7 @@ func TestRead(t *testing.T) {
 	readExitWG.Add(NumberOfReadInitiators)
 	for i := 0; i < NumberOfReadInitiators; i++ {
 		if batchedRead {
-			go readInitiator(pkChan, &readExitWG)
+			go batchReader(pkChan, &readExitWG)
 		} else {
 			go directReader(pkChan, &readExitWG)
 		}
@@ -40,7 +41,7 @@ func TestRead(t *testing.T) {
 	readExitWG.Wait()
 }
 
-func readInitiator(pkChan chan string, exitWG *sync.WaitGroup) {
+func batchReader(pkChan chan string, exitWG *sync.WaitGroup) {
 	defer exitWG.Done()
 	for {
 		pk, moreEntries := <-pkChan
@@ -71,4 +72,8 @@ func directReader(pkChan chan string, exitWG *sync.WaitGroup) {
 			panic("entry does not match request")
 		}
 	}
+}
+
+func appendResults(duration time.Duration, readNum, batchSize int, batchedRead bool) {
+
 }
