@@ -21,7 +21,16 @@ const (
 	statisticsFileName     = "statistics.csv"
 )
 
+type averageDurationType struct {
+	cumulativeDuration int64
+	counter            int64
+	lock               sync.Mutex
+}
+
+var averageDurationCalculator *averageDurationType
+
 func TestRead(t *testing.T) {
+	averageDurationCalculator = &averageDurationType{}
 	InitReading()
 	readExitWG := sync.WaitGroup{}
 	pkChan := make(chan string, ChannelBufferSize)
@@ -53,8 +62,10 @@ func batchReader(pkChan chan string, exitWG *sync.WaitGroup) {
 		if !moreEntries {
 			break
 		}
+		startRead := time.Now()
 		entry, err := ReadEntry(pk)
 		panicIfError(err)
+		averageDurationCalculator.addDuration(startRead)
 		if entry.Pk != pk {
 			panic("entry do not match request")
 		}
@@ -70,8 +81,10 @@ func discreteReader(pkChan chan string, exitWG *sync.WaitGroup) {
 		if !moreEntries {
 			break
 		}
+		startRead := time.Now()
 		err := db.QueryRow(context.Background(), readEntrySQL, pk).Scan(&readPk, &readPayload)
 		panicIfError(err)
+		averageDurationCalculator.addDuration(startRead)
 		if readPk != pk {
 			panic("entry does not match request")
 		}
@@ -89,9 +102,24 @@ func collectStats(duration time.Duration, readNum, batchSize int, batched bool) 
 	durationStr := fmt.Sprintf("%v", duration)
 	batchSizeStr := fmt.Sprintf("% 10d", batchSize)
 	readNumStr := fmt.Sprintf("% 10d", readNum)
-	line := []string{durationStr, batchSizeStr, readNumStr, batchedStr}
+	averageReadDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getAverage())
+	line := []string{durationStr, averageReadDurationStr, batchSizeStr, readNumStr, batchedStr}
 	err = w.Write(line)
 	panicIfError(err)
 	w.Flush()
 	f.Close()
+}
+
+func (c *averageDurationType) addDuration(start time.Time) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.counter++
+	c.cumulativeDuration += int64(time.Now().Sub(start))
+}
+
+func (c *averageDurationType) getAverage() time.Duration {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	average := time.Duration(c.cumulativeDuration / c.counter)
+	return average
 }

@@ -12,7 +12,7 @@ const (
 	NumberOfReadWorkers   = 10
 	BatchingTimeout       = 500 * time.Microsecond
 	ReadTimeout           = 100 * time.Millisecond
-	NumberOfReadsPerBatch = 16
+	NumberOfReadsPerBatch = 32
 )
 
 type readRequest struct {
