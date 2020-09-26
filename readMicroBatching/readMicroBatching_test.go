@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"sync"
@@ -24,13 +25,15 @@ const (
 type averageDurationType struct {
 	cumulativeDuration int64
 	counter            int64
+	maxDuration        int64
+	minDuration        int64
 	lock               sync.Mutex
 }
 
 var averageDurationCalculator *averageDurationType
 
 func TestRead(t *testing.T) {
-	averageDurationCalculator = &averageDurationType{}
+	averageDurationCalculator = &averageDurationType{minDuration: math.MaxInt64}
 	InitReading()
 	readExitWG := sync.WaitGroup{}
 	pkChan := make(chan string, ChannelBufferSize)
@@ -103,7 +106,10 @@ func collectStats(duration time.Duration, readNum, batchSize int, batched bool) 
 	batchSizeStr := fmt.Sprintf("% 10d", batchSize)
 	readNumStr := fmt.Sprintf("% 10d", readNum)
 	averageReadDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getAverage())
-	line := []string{durationStr, averageReadDurationStr, batchSizeStr, readNumStr, batchedStr}
+	maxDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getMaxDuration())
+	minDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getMinDuration())
+
+	line := []string{durationStr, averageReadDurationStr, maxDurationStr, minDurationStr, batchSizeStr, readNumStr, batchedStr}
 	err = w.Write(line)
 	panicIfError(err)
 	w.Flush()
@@ -114,7 +120,14 @@ func (c *averageDurationType) addDuration(start time.Time) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.counter++
-	c.cumulativeDuration += int64(time.Now().Sub(start))
+	int64Duration := int64(time.Now().Sub(start))
+	c.cumulativeDuration += int64Duration
+	if c.maxDuration < int64Duration {
+		c.maxDuration = int64Duration
+	}
+	if c.minDuration > int64Duration {
+		c.minDuration = int64Duration
+	}
 }
 
 func (c *averageDurationType) getAverage() time.Duration {
@@ -122,4 +135,14 @@ func (c *averageDurationType) getAverage() time.Duration {
 	defer c.lock.Unlock()
 	average := time.Duration(c.cumulativeDuration / c.counter)
 	return average
+}
+func (c *averageDurationType) getMaxDuration() time.Duration {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return time.Duration(c.maxDuration)
+}
+func (c *averageDurationType) getMinDuration() time.Duration {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return time.Duration(c.minDuration)
 }
