@@ -108,6 +108,7 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 		for _, readRequest := range message {
 			pkSlice = append(pkSlice, readRequest.pk)
 		}
+		// TODO(barak): remove duplicates?
 		readEntriesSQL := "select pk,payload from random_read_test where pk = any ($1)"
 		rows, err := db.Query(context.Background(), readEntriesSQL, pkSlice)
 		if err != nil {
