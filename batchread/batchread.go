@@ -30,7 +30,7 @@ type rowType struct {
 
 type readResponse struct {
 	testRow *rowType
-	err     error
+	err     error // TODO(barak): we panic on error so we remove remove this one or handle errors
 }
 
 var (
