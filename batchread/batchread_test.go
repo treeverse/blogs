@@ -13,16 +13,18 @@ import (
 )
 
 const (
-	batchedRead            = true
-	NumberOfReadsPerBatch  = 16
-	NumberOfConnections    = 10
-	NumberOfReads          = 3_000_000
-	MaxPkRange             = 350_000_000
-	NumberOfReadWorkers    = 10
-	NumberOfReadInitiators = 300
-	SequenceLength         = 10
-	StatisticsFileName     = "statistics.csv"
-	ChannelBufferSize      = 10
+	batchedRead            = true        // if false - direct read is performed instead of batched read
+	NumberOfReadsPerBatch  = 16          // on my configuration 16 was optimal. Try what works for you
+	NumberOfDBConnections  = 10          // The number of cores postgres can use is a good starting point
+	NumberOfReads          = 3_000_000   // how many reads will be performed in this run
+	MaxPkRange             = 350_000_000 // number of rows in random_read_test table. The range from which PK values will be generated
+	NumberOfReadWorkers    = 10          // should not exceed NumberOfDBConnections
+	NumberOfReadInitiators = 300         // read goroutines that can issue read requests. should reflect the number of
+	// pending requests at any given time
+	SequenceLength = 10 // for each random number generated, the program creates a sequence of SequenceLength consecutive
+	// primary keys. This number reflect the degree of locality of reference in you access pattern.
+	StatisticsFileName  = "statistics.csv"
+	pkChannelBufferSize = 10
 )
 
 type averageDurationType struct {
@@ -36,8 +38,8 @@ type averageDurationType struct {
 func TestRead(t *testing.T) {
 	ctx := context.Background()
 	averageDurationCalculator := &averageDurationType{minDuration: math.MaxInt64}
-	InitReading(NumberOfReadsPerBatch, NumberOfReadWorkers, NumberOfConnections)
-	pkChan := make(chan string, ChannelBufferSize)
+	InitReading(NumberOfReadsPerBatch, NumberOfReadWorkers, NumberOfDBConnections)
+	pkChan := make(chan string, pkChannelBufferSize)
 	var readExitWG sync.WaitGroup
 	readExitWG.Add(NumberOfReadInitiators)
 	for i := 0; i < NumberOfReadInitiators; i++ {
