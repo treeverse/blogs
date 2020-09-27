@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -113,11 +114,10 @@ func appendStats(averageDurationCalculator *averageDurationType, duration time.D
 	} else {
 		batchedStr = "discrete"
 	}
-	durationStr := fmt.Sprintf("%s", duration)
-	batchSizeStr := fmt.Sprintf("%d", batchSize)
-	readNumStr := fmt.Sprintf("%d", readNum)
-	averageReadDurationStr := fmt.Sprintf("%v", averageDurationCalculator.getAverage())
-	err = w.Write([]string{durationStr, averageReadDurationStr, batchSizeStr, readNumStr, batchedStr})
+	batchSizeStr := strconv.Itoa(batchSize)
+	readNumStr := strconv.Itoa(readNum)
+	averageReadDurationStr := averageDurationCalculator.getAverage().String()
+	err = w.Write([]string{duration.String(), averageReadDurationStr, batchSizeStr, readNumStr, batchedStr})
 	panicIfError(err)
 }
 

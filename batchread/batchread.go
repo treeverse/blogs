@@ -13,7 +13,7 @@ const (
 	BatchingTimeout       = 500 * time.Microsecond
 	ReadTimeout           = 100 * time.Millisecond
 	NumberOfReadsPerBatch = 32
-	ReadRequestChanSize   = 1 // TODO(barak): think we need to change and explain how this channel size effect the run
+	ReadRequestChanSize   = 1 // TODO(barak): think that we would like more than 1 for this channel, and we need to explain why (maybe just in the blog)
 )
 
 type readRequest struct {
@@ -42,11 +42,12 @@ var (
 )
 
 func ReadEntry(pk string) (*rowType, error) {
-	replyChan := make(chan readResponse, 1)
+	replyChan := make(chan readResponse, 1) // TODO(barak): note that this channel must be buffered at least with size 1
 	request := readRequest{
 		pk: pk,
 		replyChan: replyChan,
 	}
+	// TODO(barak): just note that from the caller perspective we need ReadTimeout to be relevant also to the time we managed to enter the request to the channel.
 	readRequestChan <- request
 	select {
 	case response := <-replyChan:
@@ -67,14 +68,12 @@ func InitReading() {
 
 func batchingOrchestrator() {
 	batchesChan := make(chan readMicroBatch, NumberOfReadWorkers)
-	defer func() {
-		close(batchesChan)
-	}()
+	defer close(batchesChan)
 	for i := 0; i < NumberOfReadWorkers; i++ {
 		go readEntriesBatch(batchesChan)
 	}
 	readBatch := make(readMicroBatch, 0, NumberOfReadsPerBatch)
-	batchingTimer := time.NewTimer(time.Hour)
+	batchingTimer := time.NewTimer(time.Hour) // TODO(barak): 1 hour?
 	for {
 		select {
 		case request, moreEntries := <-readRequestChan:
@@ -126,8 +125,10 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 			payload, ok := rowsMap[readRequest.pk]
 			switch {
 			case ok:
-				response.testRow = &rowType{Pk: readRequest.pk,
-					Payload: payload}
+				response.testRow = &rowType{
+					Pk: readRequest.pk,
+					Payload: payload,
+				}
 				response.err = nil
 			case err != nil:
 				response.err = err
