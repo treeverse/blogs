@@ -13,13 +13,15 @@ import (
 )
 
 const (
-	NumberOfReadInitiators = 300
-	ChannelBufferSize      = 10
-	MaxPkRange             = 350_000_000
-	NumberOfReads          = 3_000_000
 	batchedRead            = true
+	NumberOfReadsPerBatch  = 24
+	NumberOfReads          = 3_000_000
+	MaxPkRange             = 350_000_000
+	NumberOfReadWorkers    = 10
+	NumberOfReadInitiators = 300
 	SequenceLength         = 10
-	statisticsFileName     = "statistics.csv"
+	StatisticsFileName     = "statistics.csv"
+	ChannelBufferSize      = 10
 )
 
 type averageDurationType struct {
@@ -34,7 +36,7 @@ var averageDurationCalculator *averageDurationType
 
 func TestRead(t *testing.T) {
 	averageDurationCalculator = &averageDurationType{minDuration: math.MaxInt64}
-	InitReading()
+	InitReading(NumberOfReadsPerBatch, NumberOfReadWorkers)
 	readExitWG := sync.WaitGroup{}
 	pkChan := make(chan string, ChannelBufferSize)
 	readExitWG.Add(NumberOfReadInitiators)
@@ -95,12 +97,20 @@ func discreteReader(pkChan chan string, exitWG *sync.WaitGroup) {
 }
 
 func collectStats(duration time.Duration, readNum, batchSize int, batched bool) {
-	f, err := os.OpenFile(statisticsFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
+	var newFile bool = false
+	if _, err := os.Stat(StatisticsFileName); os.IsNotExist(err) {
+		newFile = true
+	}
+	f, err := os.OpenFile(StatisticsFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
 	panicIfError(err)
 	w := csv.NewWriter(f)
-	batchedStr := "  discrete  "
+	if newFile {
+		err = w.Write([]string{"run type", "batch size", "duration", "average duearion", "max duearion", "min duearion", "number of reads"})
+		panicIfError(err)
+	}
+	runTypeStr := "  discrete  "
 	if batched {
-		batchedStr = " batched   "
+		runTypeStr = " batched   "
 	}
 	durationStr := fmt.Sprintf("%v", duration)
 	batchSizeStr := fmt.Sprintf("% 10d", batchSize)
@@ -109,7 +119,7 @@ func collectStats(duration time.Duration, readNum, batchSize int, batched bool) 
 	maxDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getMaxDuration())
 	minDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getMinDuration())
 
-	line := []string{durationStr, averageReadDurationStr, maxDurationStr, minDurationStr, batchSizeStr, readNumStr, batchedStr}
+	line := []string{runTypeStr, batchSizeStr, durationStr, averageReadDurationStr, maxDurationStr, minDurationStr, readNumStr}
 	err = w.Write(line)
 	panicIfError(err)
 	w.Flush()

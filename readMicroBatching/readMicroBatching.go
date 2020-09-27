@@ -9,10 +9,8 @@ import (
 )
 
 const (
-	NumberOfReadWorkers   = 10
-	BatchingTimeout       = 500 * time.Microsecond
-	ReadTimeout           = 100 * time.Millisecond
-	NumberOfReadsPerBatch = 16
+	BatchingTimeout = 500 * time.Microsecond
+	ReadTimeout     = 100 * time.Millisecond
 )
 
 type readRequest struct {
@@ -47,24 +45,24 @@ func ReadEntry(pk string) (*rowType, error) {
 	}
 }
 
-func InitReading() {
+func InitReading(numberOfReadsPerBatch, numberOfReadWorkers int) {
 	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
 	panicIfError(err)
 	db, err = pgxpool.ConnectConfig(context.Background(), poolConfig)
 	panicIfError(err)
 	readRequestChan = make(chan readRequest, 1)
-	go batchingOrcestrator()
+	go batchingOrcestrator(numberOfReadsPerBatch, numberOfReadWorkers)
 }
 
-func batchingOrcestrator() {
-	batchesChan := make(chan readMicroBatch, NumberOfReadWorkers)
+func batchingOrcestrator(numberOfReadsPerBatch, numberOfReadWorkers int) {
+	batchesChan := make(chan readMicroBatch, numberOfReadWorkers)
 	defer func() {
 		close(batchesChan)
 	}()
-	for i := 0; i < NumberOfReadWorkers; i++ {
+	for i := 0; i < numberOfReadWorkers; i++ {
 		go readEntriesBatch(batchesChan)
 	}
-	readBatch := make(readMicroBatch, 0, NumberOfReadsPerBatch)
+	readBatch := make(readMicroBatch, 0, numberOfReadsPerBatch)
 	batchingTimer := time.NewTimer(time.Hour)
 	for {
 		select {
@@ -76,15 +74,15 @@ func batchingOrcestrator() {
 				batchingTimer.Reset(BatchingTimeout)
 			}
 			readBatch = append(readBatch, request)
-			if len(readBatch) == NumberOfReadsPerBatch {
+			if len(readBatch) == numberOfReadsPerBatch {
 				batchingTimer.Stop()
 				batchesChan <- readBatch
-				readBatch = make(readMicroBatch, 0, NumberOfReadsPerBatch)
+				readBatch = make(readMicroBatch, 0, numberOfReadsPerBatch)
 			}
 		case <-batchingTimer.C:
 			if len(readBatch) != 0 {
 				batchesChan <- readBatch
-				readBatch = make(readMicroBatch, 0, NumberOfReadsPerBatch)
+				readBatch = make(readMicroBatch, 0, numberOfReadsPerBatch)
 			}
 		}
 	}
@@ -96,9 +94,9 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 		if !more {
 			return
 		}
-		pkSlice := make([]string, 0, len(message))
-		for _, readRequest := range message {
-			pkSlice = append(pkSlice, readRequest.pk)
+		pkSlice := make([]string, len(message))
+		for i, readRequest := range message {
+			pkSlice[i] = readRequest.pk
 		}
 		readEntriesSQL := " select pk,payload from random_read_test where pk = any ($1)"
 		rows, err := db.Query(context.Background(), readEntriesSQL, pkSlice)
