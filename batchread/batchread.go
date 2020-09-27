@@ -1,4 +1,4 @@
-package readMicroBatching
+package batchread
 
 import (
 	"context"
@@ -13,31 +13,40 @@ const (
 	BatchingTimeout       = 500 * time.Microsecond
 	ReadTimeout           = 100 * time.Millisecond
 	NumberOfReadsPerBatch = 32
+	ReadRequestChanSize   = 1 // TODO(barak): think we need to change and explain how this channel size effect the run
 )
 
 type readRequest struct {
 	pk        string
 	replyChan chan readResponse
 }
+
 type readMicroBatch []readRequest
+
 type rowType struct {
 	Pk      string
 	Payload string
 }
+
 type readResponse struct {
 	testRow *rowType
 	err     error
 }
 
-var db *pgxpool.Pool
-var readRequestChan chan readRequest
-var ErrNotFound = errors.New("not found")
-var ErrReadEntryTimeout = errors.New("read entry timeout")
+var (
+	db                  *pgxpool.Pool
+	readRequestChan     chan readRequest
+
+	ErrNotFound         = errors.New("not found")
+	ErrReadEntryTimeout = errors.New("read entry timeout")
+)
 
 func ReadEntry(pk string) (*rowType, error) {
 	replyChan := make(chan readResponse, 1)
-	request := readRequest{pk: pk,
-		replyChan: replyChan}
+	request := readRequest{
+		pk: pk,
+		replyChan: replyChan,
+	}
 	readRequestChan <- request
 	select {
 	case response := <-replyChan:
@@ -48,15 +57,15 @@ func ReadEntry(pk string) (*rowType, error) {
 }
 
 func InitReading() {
-	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+	var err error
+	db, err = pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL"))
 	panicIfError(err)
-	db, err = pgxpool.ConnectConfig(context.Background(), poolConfig)
-	panicIfError(err)
-	readRequestChan = make(chan readRequest, 1)
-	go batchingOrcestrator()
+
+	readRequestChan = make(chan readRequest, ReadRequestChanSize)
+	go batchingOrchestrator()
 }
 
-func batchingOrcestrator() {
+func batchingOrchestrator() {
 	batchesChan := make(chan readMicroBatch, NumberOfReadWorkers)
 	defer func() {
 		close(batchesChan)
@@ -100,7 +109,7 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 		for _, readRequest := range message {
 			pkSlice = append(pkSlice, readRequest.pk)
 		}
-		readEntriesSQL := " select pk,payload from random_read_test where pk = any ($1)"
+		readEntriesSQL := "select pk,payload from random_read_test where pk = any ($1)"
 		rows, err := db.Query(context.Background(), readEntriesSQL, pkSlice)
 		if err != nil {
 			panic(err)
