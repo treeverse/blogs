@@ -1,4 +1,4 @@
-package readMicroBatching
+package batchread
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 const (
 	batchedRead            = true
 	NumberOfReadsPerBatch  = 24
+	NumberOfConnections    = 10
 	NumberOfReads          = 3_000_000
 	MaxPkRange             = 350_000_000
 	NumberOfReadWorkers    = 10
@@ -36,7 +37,7 @@ var averageDurationCalculator *averageDurationType
 
 func TestRead(t *testing.T) {
 	averageDurationCalculator = &averageDurationType{minDuration: math.MaxInt64}
-	InitReading(NumberOfReadsPerBatch, NumberOfReadWorkers)
+	InitReading(NumberOfReadsPerBatch, NumberOfReadWorkers, NumberOfConnections)
 	readExitWG := sync.WaitGroup{}
 	pkChan := make(chan string, ChannelBufferSize)
 	readExitWG.Add(NumberOfReadInitiators)

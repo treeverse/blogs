@@ -1,8 +1,9 @@
-package readMicroBatching
+package batchread
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"os"
 	"time"
@@ -45,7 +46,8 @@ func ReadEntry(pk string) (*rowType, error) {
 	}
 }
 
-func InitReading(numberOfReadsPerBatch, numberOfReadWorkers int) {
+func InitReading(numberOfReadsPerBatch, numberOfReadWorkers, numberOfConnections int) {
+	numberOfConnectionsStr := fmt.Sprintf("&pool_max_conns=%d", numberOfConnections)
 	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
 	panicIfError(err)
 	db, err = pgxpool.ConnectConfig(context.Background(), poolConfig)
