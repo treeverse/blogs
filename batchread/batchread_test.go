@@ -14,7 +14,7 @@ import (
 
 const (
 	batchedRead            = true
-	NumberOfReadsPerBatch  = 24
+	NumberOfReadsPerBatch  = 16
 	NumberOfConnections    = 10
 	NumberOfReads          = 3_000_000
 	MaxPkRange             = 350_000_000
@@ -33,19 +33,18 @@ type averageDurationType struct {
 	lock               sync.Mutex
 }
 
-var averageDurationCalculator *averageDurationType
-
 func TestRead(t *testing.T) {
-	averageDurationCalculator = &averageDurationType{minDuration: math.MaxInt64}
+	ctx := context.Background()
+	averageDurationCalculator := &averageDurationType{minDuration: math.MaxInt64}
 	InitReading(NumberOfReadsPerBatch, NumberOfReadWorkers, NumberOfConnections)
-	readExitWG := sync.WaitGroup{}
 	pkChan := make(chan string, ChannelBufferSize)
+	var readExitWG sync.WaitGroup
 	readExitWG.Add(NumberOfReadInitiators)
 	for i := 0; i < NumberOfReadInitiators; i++ {
 		if batchedRead {
-			go batchReader(pkChan, &readExitWG)
+			go batchReader(ctx, &readExitWG, pkChan, averageDurationCalculator)
 		} else {
-			go discreteReader(pkChan, &readExitWG)
+			go discreteReader(ctx, &readExitWG, pkChan, averageDurationCalculator)
 		}
 	}
 	start := time.Now()
@@ -58,52 +57,63 @@ func TestRead(t *testing.T) {
 	}
 	close(pkChan)
 	readExitWG.Wait()
-	collectStats(time.Now().Sub(start), NumberOfReads, NumberOfReadsPerBatch, batchedRead)
+
+	collectStats(averageDurationCalculator, time.Since(start), NumberOfReads, NumberOfReadsPerBatch, batchedRead)
 }
 
-func batchReader(pkChan chan string, exitWG *sync.WaitGroup) {
-	defer exitWG.Done()
+func batchReader(ctx context.Context, wg *sync.WaitGroup, pkChan chan string, averageDurationCalculator *averageDurationType) {
+	defer wg.Done()
 	for {
-		pk, moreEntries := <-pkChan
-		if !moreEntries {
-			break
-		}
-		startRead := time.Now()
-		entry, err := ReadEntry(pk)
-		panicIfError(err)
-		averageDurationCalculator.addDuration(startRead)
-		if entry.Pk != pk {
-			panic("entry do not match request")
+		select {
+		case pk, ok := <-pkChan:
+			if !ok {
+				return
+			}
+			startRead := time.Now()
+			entry, err := ReadEntry(pk)
+			panicIfError(err)
+			averageDurationCalculator.addDuration(startRead)
+			if entry.Pk != pk {
+				panic("entry do not match request")
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
-func discreteReader(pkChan chan string, exitWG *sync.WaitGroup) {
-	var readPk, readPayload string
-	readEntrySQL := "select pk,payload from random_read_test where pk = $1"
-	defer exitWG.Done()
+func discreteReader(ctx context.Context, wg *sync.WaitGroup, pkChan chan string, averageDurationCalculator *averageDurationType) {
+	defer wg.Done()
+	const readEntrySQL = "select pk,payload from random_read_test where pk = $1"
 	for {
-		pk, moreEntries := <-pkChan
-		if !moreEntries {
-			break
-		}
-		startRead := time.Now()
-		err := db.QueryRow(context.Background(), readEntrySQL, pk).Scan(&readPk, &readPayload)
-		panicIfError(err)
-		averageDurationCalculator.addDuration(startRead)
-		if readPk != pk {
-			panic("entry does not match request")
+		select {
+		case pk, ok := <-pkChan:
+			if !ok {
+				return
+			}
+			startRead := time.Now()
+			var readPk, readPayload string
+			err := db.QueryRow(ctx, readEntrySQL, pk).Scan(&readPk, &readPayload)
+			panicIfError(err)
+			averageDurationCalculator.addDuration(startRead)
+			if readPk != pk {
+				panic("entry does not match request")
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
-func collectStats(duration time.Duration, readNum, batchSize int, batched bool) {
+func collectStats(averageDurationCalculator *averageDurationType, duration time.Duration, readNum, batchSize int, batched bool) {
 	var newFile bool = false
 	if _, err := os.Stat(StatisticsFileName); os.IsNotExist(err) {
 		newFile = true
 	}
 	f, err := os.OpenFile(StatisticsFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
 	panicIfError(err)
+	defer f.Close()
+
 	w := csv.NewWriter(f)
 	if newFile {
 		err = w.Write([]string{"run type", "batch size", "duration", "average duearion", "max duearion", "min duearion", "number of reads"})
@@ -131,7 +141,7 @@ func (c *averageDurationType) addDuration(start time.Time) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.counter++
-	int64Duration := int64(time.Now().Sub(start))
+	int64Duration := int64(time.Since(start))
 	c.cumulativeDuration += int64Duration
 	if c.maxDuration < int64Duration {
 		c.maxDuration = int64Duration
