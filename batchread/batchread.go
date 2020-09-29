@@ -61,17 +61,19 @@ func InitReading(numberOfReadsPerBatch, numberOfReadWorkers, numberOfConnections
 	db, err = pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL")+numberOfConnectionsStr)
 	panicIfError(err)
 	readRequestChan = make(chan readRequest, 1)
-	go batchingOrcestrator(numberOfReadsPerBatch, numberOfReadWorkers)
+	go batchingOrchestrator(numberOfReadsPerBatch, numberOfReadWorkers)
 }
 
-func batchingOrcestrator(numberOfReadsPerBatch, numberOfReadWorkers int) {
+func batchingOrchestrator(numberOfReadsPerBatch, numberOfReadWorkers int) {
 	batchesChan := make(chan readMicroBatch, numberOfReadWorkers)
 	defer close(batchesChan)
 	for i := 0; i < numberOfReadWorkers; i++ {
 		go readEntriesBatch(batchesChan)
 	}
 	readBatch := make(readMicroBatch, 0, numberOfReadsPerBatch)
-	batchingTimer := time.NewTimer(time.Hour) // Timing if this timer is irelevant. It will be reset by the first request
+	// batching timer will be set on the first request
+	batchingTimer := time.NewTimer(0)
+	batchingTimer.Stop()
 	for {
 		select {
 		case request, moreEntries := <-readRequestChan:

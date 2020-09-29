@@ -108,16 +108,14 @@ func discreteReader(ctx context.Context, wg *sync.WaitGroup, pkChan chan string,
 }
 
 func collectStats(averageDurationCalculator *averageDurationType, duration time.Duration, readNum, batchSize int, batched bool) {
-	var newFile bool = false
-	if _, err := os.Stat(StatisticsFileName); os.IsNotExist(err) {
-		newFile = true
-	}
-	f, err := os.OpenFile(StatisticsFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
+	f, err := os.OpenFile(StatisticsFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	panicIfError(err)
 	defer f.Close()
-
+	st, err := f.Stat()
+	panicIfError(err)
 	w := csv.NewWriter(f)
-	if newFile {
+	defer w.Flush()
+	if st.Size() == 0 {
 		err = w.Write([]string{"run type", "batch size", "duration", "average duearion", "max duearion", "min duearion", "number of reads"})
 		panicIfError(err)
 	}
@@ -131,12 +129,9 @@ func collectStats(averageDurationCalculator *averageDurationType, duration time.
 	averageReadDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getAverage())
 	maxDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getMaxDuration())
 	minDurationStr := fmt.Sprintf("  %v  ", averageDurationCalculator.getMinDuration())
-
 	line := []string{runTypeStr, batchSizeStr, durationStr, averageReadDurationStr, maxDurationStr, minDurationStr, readNumStr}
 	err = w.Write(line)
 	panicIfError(err)
-	w.Flush()
-	f.Close()
 }
 
 func (c *averageDurationType) addDuration(start time.Time) {
@@ -159,11 +154,13 @@ func (c *averageDurationType) getAverage() time.Duration {
 	average := time.Duration(c.cumulativeDuration / c.counter)
 	return average
 }
+
 func (c *averageDurationType) getMaxDuration() time.Duration {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return time.Duration(c.maxDuration)
 }
+
 func (c *averageDurationType) getMinDuration() time.Duration {
 	c.lock.Lock()
 	defer c.lock.Unlock()
