@@ -3,10 +3,10 @@ package batchread
 import (
 	"context"
 	"errors"
-	"fmt"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"os"
 	"time"
+
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 const (
@@ -54,23 +54,26 @@ func ReadEntry(pk string) (*rowType, error) {
 	}
 }
 
-func InitReading(numberOfReadsPerBatch, numberOfReadWorkers, numberOfConnections int) {
-	var err error
-	numberOfConnectionsStr := fmt.Sprintf("&pool_max_conns=%d", numberOfConnections)
-	db, err = pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL")+numberOfConnectionsStr)
+func InitReading(numberOfReadsPerBatch, numberOfReadWorkers int, numberOfConnections int32) {
+	config, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+	panicIfError(err)
+	config.MaxConns = numberOfConnections
+	db, err = pgxpool.ConnectConfig(context.Background(), config)
 	panicIfError(err)
 	readRequestChan = make(chan readRequest, 1)
-	go batchingOrcestrator(numberOfReadsPerBatch, numberOfReadWorkers)
+	go batchingOrchestrator(numberOfReadsPerBatch, numberOfReadWorkers)
 }
 
-func batchingOrcestrator(numberOfReadsPerBatch, numberOfReadWorkers int) {
+func batchingOrchestrator(numberOfReadsPerBatch, numberOfReadWorkers int) {
 	batchesChan := make(chan readMicroBatch, numberOfReadWorkers)
 	defer close(batchesChan)
 	for i := 0; i < numberOfReadWorkers; i++ {
 		go readEntriesBatch(batchesChan)
 	}
 	readBatch := make(readMicroBatch, 0, numberOfReadsPerBatch)
-	batchingTimer := time.NewTimer(time.Hour) // Timing if this timer is irelevant. It will be reset by the first request
+	// batching timer will be set on the first request
+	batchingTimer := time.NewTimer(0)
+	batchingTimer.Stop()
 	for {
 		select {
 		case request, moreEntries := <-readRequestChan:
@@ -112,8 +115,10 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 		for rows.Next() {
 			var pk, payload string
 			err = rows.Scan(&pk, &payload)
+			panicIfError(err)
 			rowsMap[pk] = payload
 		}
+		panicIfError(err)
 		for _, readRequest := range message {
 			var response readResponse
 			payload, ok := rowsMap[readRequest.pk]
