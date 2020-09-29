@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"os"
 	"time"
+
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 const (
@@ -112,8 +113,11 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 		for rows.Next() {
 			var pk, payload string
 			err = rows.Scan(&pk, &payload)
+			panicIfError(err)
 			rowsMap[pk] = payload
 		}
+		panicIfError(err)
+		rows.Close()
 		for _, readRequest := range message {
 			var response readResponse
 			payload, ok := rowsMap[readRequest.pk]
