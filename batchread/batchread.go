@@ -119,7 +119,6 @@ func readEntriesBatch(inputBatchChan chan readMicroBatch) {
 			rowsMap[pk] = payload
 		}
 		panicIfError(err)
-		rows.Close()
 		for _, readRequest := range message {
 			var response readResponse
 			payload, ok := rowsMap[readRequest.pk]
