@@ -3,7 +3,6 @@ package batchread
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
@@ -55,10 +54,11 @@ func ReadEntry(pk string) (*rowType, error) {
 	}
 }
 
-func InitReading(numberOfReadsPerBatch, numberOfReadWorkers, numberOfConnections int) {
-	var err error
-	numberOfConnectionsStr := fmt.Sprintf("&pool_max_conns=%d", numberOfConnections)
-	db, err = pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL")+numberOfConnectionsStr)
+func InitReading(numberOfReadsPerBatch, numberOfReadWorkers int, numberOfConnections int32) {
+	config, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+	panicIfError(err)
+	config.MaxConns = numberOfConnections
+	db, err = pgxpool.ConnectConfig(context.Background(), config)
 	panicIfError(err)
 	readRequestChan = make(chan readRequest, 1)
 	go batchingOrchestrator(numberOfReadsPerBatch, numberOfReadWorkers)
