@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"embed"
+	"embed" // The required package for using go:"embed" directive
 	"flag"
 	"fmt"
 	"image"
@@ -38,13 +38,18 @@ func main() {
 	listenAddr := flag.String("l", ":8000", "Listen address")
 	printLicense := flag.Bool("license", false, "Print license")
 	flag.Parse()
+
 	if *printLicense {
 		fmt.Println(license)
 		return
 	}
+
 	rand.Seed(time.Now().UnixNano())
+	// Serve UI files handler
 	http.Handle("/", http.FileServer(http.FS(webUI)))
+	// Generate postcard handler
 	http.HandleFunc("/postcard", postcardHandler)
+
 	fmt.Println("Listen and serve on", *listenAddr)
 	err := http.ListenAndServe(*listenAddr, nil)
 	if err != nil {
@@ -52,6 +57,7 @@ func main() {
 	}
 }
 
+// postcardHandler http handler parse user input and generate PNG postcard in response by calling `generatePostcard`
 func postcardHandler(w http.ResponseWriter, r *http.Request) {
 	text := r.FormValue("postcard")
 	text = strings.ReplaceAll(text, "\r", "")
@@ -71,6 +77,7 @@ func postcardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// generatePostcard creates image from postcard background, draw stamp and `lines` strings using `clarendonBT` font
 func generatePostcard(lines []string) image.Image {
 	postcardImg, _ := png.Decode(bytes.NewReader(postcardPNG))
 	fnt, _ := truetype.Parse(clarendonBT)
