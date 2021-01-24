@@ -2,4 +2,4 @@
 
 Blog's demo example code that uses "embed" directive.
 The service will accept text from the user and generate a postcard image rendered with the text.
-It will include embed the application's license.
+It will use embed for the application's license.
