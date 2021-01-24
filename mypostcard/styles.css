@@ -1,0 +1,5 @@
+body { background-color:white; margin:50px 100px; font-family:verdana; }
+p { font-size:18; }
+input, label { display:block; }
+.title { color:teal; font-size:30; }
+.button { margin:10px 0px; padding:10px; color:white; border:none; background-color:teal; }
