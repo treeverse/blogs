@@ -1,3 +1,10 @@
+# Read an Excel file, convert it to Parquet, and write it to S3 (or lakeFS)
+# -------------------------------------------------------------------------
+# Thanks chatGPT for writing this for me 🤖
+# plus lakeFS docs (https://docs.lakefs.io/integrations/python.html)
+#
+# @rmoff
+# 2023-03-08
 import os
 import pandas as pd
 import pyarrow as pa
