@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
@@ -44,7 +43,6 @@ func main() {
 		return
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	// Serve UI files handler
 	http.Handle("/", http.FileServer(http.FS(webUI)))
 	// Generate postcard handler
